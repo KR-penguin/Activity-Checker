@@ -1,11 +1,71 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Modal, Alert, Dimensions, TextInput } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import studentData from './src/data/students.json';
 
 const screenWidth = Dimensions.get('window').width;
 const CARD_MARGIN = 3;
 const CARD_WIDTH = (screenWidth - 24 - CARD_MARGIN * 10) / 5;
+const DB_NAME = 'activity-tracker-db';
+const STORE_NAME = 'app-state';
+const LOGS_KEY = 'activity_logs';
+
+const openDatabase = () => new Promise((resolve, reject) => {
+  if (typeof indexedDB === 'undefined') {
+    reject(new Error('IndexedDB를 사용할 수 없는 환경입니다.'));
+    return;
+  }
+
+  const request = indexedDB.open(DB_NAME, 1);
+
+  request.onupgradeneeded = () => {
+    const database = request.result;
+    if (!database.objectStoreNames.contains(STORE_NAME)) {
+      database.createObjectStore(STORE_NAME);
+    }
+  };
+
+  request.onsuccess = () => resolve(request.result);
+  request.onerror = () => reject(request.error || new Error('IndexedDB를 열지 못했습니다.'));
+});
+
+const readLogs = async () => {
+  const database = await openDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly');
+    const store = transaction.objectStore(STORE_NAME);
+    const request = store.get(LOGS_KEY);
+
+    request.onsuccess = () => {
+      database.close();
+      resolve(request.result || {});
+    };
+    request.onerror = () => {
+      database.close();
+      reject(request.error || new Error('기록을 불러오지 못했습니다.'));
+    };
+  });
+};
+
+const writeLogs = async (logs) => {
+  const database = await openDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite');
+    const store = transaction.objectStore(STORE_NAME);
+
+    transaction.oncomplete = () => {
+      database.close();
+      resolve();
+    };
+    transaction.onerror = () => {
+      database.close();
+      reject(transaction.error || new Error('기록을 저장하지 못했습니다.'));
+    };
+
+    store.put(logs, LOGS_KEY);
+  });
+};
 
 const ALL_STUDENTS = studentData.map(s => ({
   id: `${s.classNum}-${s.number}`,
@@ -35,13 +95,23 @@ export default function App() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const savedLogs = await AsyncStorage.getItem('activity_logs');
-    if (savedLogs) setLogs(JSON.parse(savedLogs));
+    try {
+      const savedLogs = await readLogs();
+      setLogs(savedLogs);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('저장소 오류', 'IndexedDB에서 기록을 불러오지 못했습니다.');
+    }
   };
 
   const saveData = async (newLogs) => {
-    await AsyncStorage.setItem('activity_logs', JSON.stringify(newLogs));
-    setLogs(newLogs);
+    try {
+      await writeLogs(newLogs);
+      setLogs(newLogs);
+    } catch (error) {
+      console.error(error);
+      Alert.alert('저장소 오류', 'IndexedDB에 기록을 저장하지 못했습니다.');
+    }
   };
 
   const lol = async () => {

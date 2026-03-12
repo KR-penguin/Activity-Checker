@@ -24,7 +24,15 @@
       }
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "ActivityTracker",
+      "shortName": "Activity",
+      "lang": "ko",
+      "description": "3층 학습실 활동 체크를 위한 웹 앱",
+      "themeColor": "#1f2937",
+      "backgroundColor": "#f3f4f6",
+      "display": "standalone",
+      "startUrl": "/"
     },
     "extra": {
       "eas": {
